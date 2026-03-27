@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GG Tracker - 전적 기록</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0d1117; color: #e6edf3;
+         font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+  header { background: #161b22; border-bottom: 1px solid #30363d;
+           padding: 16px 32px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; color: #58a6ff; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%;
+                background: #3fb950; box-shadow: 0 0 6px #3fb950;
+                animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.4 } }
+  .status-label { color: #8b949e; font-size: 13px; }
+  .container { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+  .stats { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  .stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+               padding: 20px 24px; flex: 1; min-width: 160px; }
+  .stat-card .label { color: #8b949e; font-size: 13px; margin-bottom: 8px; }
+  .stat-card .value { font-size: 28px; font-weight: bold; }
+  .stat-card.total .value { color: #e6edf3; }
+  .stat-card.win .value { color: #3fb950; }
+  .stat-card.loss .value { color: #f85149; }
+  .stat-card.last .value { color: #58a6ff; font-size: 16px; }
+  .toolbar { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
+  .toolbar input { background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+                   padding: 8px 14px; color: #e6edf3; font-size: 14px; outline: none; width: 220px; }
+  .toolbar input:focus { border-color: #58a6ff; }
+  .toolbar select { background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+                    padding: 8px 14px; color: #e6edf3; font-size: 14px; outline: none; cursor: pointer; }
+  .table-wrap { background: #161b22; border: 1px solid #30363d; border-radius: 10px; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { background: #1c2128; color: #8b949e; font-weight: 600; padding: 12px 16px;
+       text-align: left; white-space: nowrap; border-bottom: 1px solid #30363d; }
+  td { padding: 12px 16px; border-bottom: 1px solid #21262d; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #1c2128; }
+  .empty { text-align: center; padding: 60px; color: #8b949e; }
+  .refresh-btn { margin-left: auto; background: #21262d; border: 1px solid #30363d;
+                 border-radius: 6px; padding: 8px 16px; color: #e6edf3;
+                 font-size: 13px; cursor: pointer; }
+  .refresh-btn:hover { background: #30363d; }
+  a.settings { margin-left: 8px; color: #8b949e; font-size: 13px; text-decoration: none; }
+  a.settings:hover { color: #e6edf3; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ GG Tracker</h1>
+  <div class="status-dot"></div>
+  <span class="status-label">감시 중</span>
+  <a href="/setup" class="settings">⚙ 설정</a>
+</header>
+
+<div class="container">
+  <div class="stats">
+    <div class="stat-card total">
+      <div class="label">총 게임</div>
+      <div class="value" id="totalGames">-</div>
+    </div>
+    <div class="stat-card win">
+      <div class="label">최다 승리</div>
+      <div class="value" id="topWinner" style="font-size:18px">-</div>
+    </div>
+    <div class="stat-card loss">
+      <div class="label">최다 패배</div>
+      <div class="value" id="topLoser" style="font-size:18px">-</div>
+    </div>
+    <div class="stat-card last">
+      <div class="label">마지막 게임</div>
+      <div class="value" id="lastGame">-</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="searchInput" placeholder="플레이어 이름 또는 맵 검색...">
+    <select id="raceFilter">
+      <option value="">종족 전체</option>
+      <option value="테란">테란</option>
+      <option value="저그">저그</option>
+      <option value="프로토스">프로토스</option>
+    </select>
+    <button class="refresh-btn" onclick="loadGames()">↺ 새로고침</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>날짜</th>
+          <th>맵</th>
+          <th>승자</th>
+          <th>승자 종족</th>
+          <th>패자</th>
+          <th>패자 종족</th>
+          <th>게임시간</th>
+          <th>승자 APM</th>
+          <th>패자 APM</th>
+        </tr>
+      </thead>
+      <tbody id="gameTable">
+        <tr><td colspan="10" class="empty">로딩 중...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let allGames = [];
+const raceEmoji = { '테란': '🔵', '저그': '🔴', '프로토스': '🟡', '랜덤': '⚪' };
+
+async function loadGames() {
+  try {
+    const res = await fetch('/api/games?limit=500');
+    if (!res.ok) { throw new Error(await res.text()); }
+    allGames = await res.json();
+    renderTable(allGames);
+    updateStats(allGames);
+  } catch(e) {
+    document.getElementById('gameTable').innerHTML =
+      '<tr><td colspan="10" class="empty">데이터를 불러오지 못했습니다: ' + e.message + '</td></tr>';
+  }
+}
+
+function updateStats(games) {
+  document.getElementById('totalGames').textContent = games.length;
+  const winCount = {}, lossCount = {};
+  games.forEach(g => {
+    winCount[g.winner_name] = (winCount[g.winner_name] || 0) + 1;
+    lossCount[g.loser_name] = (lossCount[g.loser_name] || 0) + 1;
+  });
+  const topWinner = Object.entries(winCount).sort((a,b) => b[1]-a[1])[0];
+  const topLoser  = Object.entries(lossCount).sort((a,b) => b[1]-a[1])[0];
+  document.getElementById('topWinner').textContent =
+    topWinner ? topWinner[0] + ' (' + topWinner[1] + '승)' : '-';
+  document.getElementById('topLoser').textContent =
+    topLoser ? topLoser[0] + ' (' + topLoser[1] + '패)' : '-';
+  document.getElementById('lastGame').textContent = games.length > 0 ? games[0].played_at : '-';
+}
+
+function renderTable(games) {
+  const tbody = document.getElementById('gameTable');
+  if (!games || games.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="empty">기록된 게임이 없습니다.<br>게임을 플레이하면 자동으로 기록됩니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = games.map((g, i) =>
+    '<tr>' +
+    '<td style="color:#8b949e">' + (games.length - i) + '</td>' +
+    '<td style="color:#8b949e;white-space:nowrap">' + g.played_at + '</td>' +
+    '<td>' + g.map_name + '</td>' +
+    '<td><strong style="color:#3fb950">' + g.winner_name + '</strong></td>' +
+    '<td>' + (raceEmoji[g.winner_race] || '') + ' ' + g.winner_race + '</td>' +
+    '<td><span style="color:#f85149">' + g.loser_name + '</span></td>' +
+    '<td>' + (raceEmoji[g.loser_race] || '') + ' ' + g.loser_race + '</td>' +
+    '<td style="color:#8b949e">' + g.duration + '</td>' +
+    '<td>' + (g.winner_apm > 0 ? g.winner_apm : '-') + '</td>' +
+    '<td>' + (g.loser_apm > 0 ? g.loser_apm : '-') + '</td>' +
+    '</tr>'
+  ).join('');
+}
+
+function applyFilters() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const race   = document.getElementById('raceFilter').value;
+  const filtered = allGames.filter(g => {
+    const matchSearch = !search ||
+      g.winner_name.toLowerCase().includes(search) ||
+      g.loser_name.toLowerCase().includes(search) ||
+      g.map_name.toLowerCase().includes(search);
+    const matchRace = !race || g.winner_race === race || g.loser_race === race;
+    return matchSearch && matchRace;
+  });
+  renderTable(filtered);
+  updateStats(filtered);
+}
+
+document.getElementById('searchInput').addEventListener('input', applyFilters);
+document.getElementById('raceFilter').addEventListener('change', applyFilters);
+
+loadGames();
+setInterval(loadGames, 30000);
+</script>
+</body>
+</html>
