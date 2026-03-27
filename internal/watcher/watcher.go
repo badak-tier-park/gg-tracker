@@ -1,6 +1,7 @@
 package watcher
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -108,14 +109,21 @@ func (w *Watcher) Watch() {
 }
 
 func (w *Watcher) processReplay(filePath string) {
-	// 이미 처리된 파일이면 건너뜀
-	if w.db.IsAlreadyProcessed(filePath) {
-		return
-	}
-
 	// 파일 크기가 안정될 때까지 대기 (최대 10초)
 	if !waitForStableFile(filePath, 2*time.Second, 10*time.Second) {
 		fmt.Printf("[경고] 파일이 아직 쓰여지고 있습니다: %s\n", filepath.Base(filePath))
+		return
+	}
+
+	// 동일 파일명(예: LastReplay.rep)에 덮어쓰는 경우를 위해 해시로 중복 검사
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Printf("[%s] 파일 읽기 실패: %v\n", timestamp(), err)
+		return
+	}
+	hashStr := fmt.Sprintf("%x", sha256.Sum256(data))
+
+	if w.db.IsAlreadyProcessed(hashStr) {
 		return
 	}
 
@@ -126,6 +134,9 @@ func (w *Watcher) processReplay(filePath string) {
 		fmt.Printf("[%s] 파싱 실패: %v\n", timestamp(), err)
 		return
 	}
+
+	// DB의 UNIQUE 제약조건 통과 및 고유성 보장을 위해 ReplayFile 필드를 해시로 덮어씀
+	game.ReplayFile = hashStr
 
 	if err := w.db.InsertGame(game); err != nil {
 		fmt.Printf("[%s] DB 저장 실패: %v\n", timestamp(), err)
