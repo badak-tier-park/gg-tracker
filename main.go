@@ -20,10 +20,13 @@ import (
 )
 
 // 빌드 시 ldflags로 주입: -X main.supabaseURL=... -X main.supabaseAnonKey=... -X main.appSecret=...
+// -X main.discordClientID=... -X main.discordClientSecret=...
 var (
-	supabaseURL     string
-	supabaseAnonKey string
-	appSecret       string
+	supabaseURL         string
+	supabaseAnonKey     string
+	appSecret           string
+	discordClientID     string
+	discordClientSecret string
 )
 
 func main() {
@@ -45,6 +48,12 @@ func main() {
 	}
 	if supabaseAnonKey == "" {
 		supabaseAnonKey = os.Getenv("SUPABASE_ANON_KEY")
+	}
+	if discordClientID == "" {
+		discordClientID = os.Getenv("DISCORD_CLIENT_ID")
+	}
+	if discordClientSecret == "" {
+		discordClientSecret = os.Getenv("DISCORD_CLIENT_SECRET")
 	}
 
 	cfgPath := filepath.Join(exeDir, "config.json")
@@ -75,7 +84,7 @@ func main() {
 
 	var w *watcher.Watcher
 
-	server := web.NewServer(st, cfg, cfgPath, restartCh)
+	server := web.NewServer(st, cfg, cfgPath, restartCh, discordClientID, discordClientSecret)
 	go server.Start(":8080")
 
 	time.Sleep(300 * time.Millisecond)
@@ -94,7 +103,7 @@ func main() {
 		fmt.Println("  상태: 감시 중 ●")
 		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 		fmt.Println()
-		w = startWatcher(cfg.ReplayPath, st)
+		w = startWatcher(cfg.ReplayPath, st, server.GetDiscordID)
 		openBrowser("http://localhost:8080")
 	}
 
@@ -106,7 +115,7 @@ func main() {
 		if w != nil {
 			w.Stop()
 		}
-		w = startWatcher(cfg.ReplayPath, st)
+		w = startWatcher(cfg.ReplayPath, st, server.GetDiscordID)
 	}
 }
 
@@ -129,8 +138,8 @@ func buildDBConnStr() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s", user, password, host, port, name)
 }
 
-func startWatcher(path string, database store.Store) *watcher.Watcher {
-	w := watcher.New(path, database)
+func startWatcher(path string, database store.Store, getDiscordID func() int64) *watcher.Watcher {
+	w := watcher.New(path, database, getDiscordID)
 	go w.Watch()
 	fmt.Printf("[%s] 감시 시작: %s\n", timestamp(), path)
 	return w

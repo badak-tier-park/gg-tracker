@@ -67,3 +67,33 @@ games (id, discord_id, played_at, map_name, game_duration_seconds,
 
 - Go 백틱 문자열 안에 JS 템플릿 리터럴(`` `${...}` ``) 사용 불가 → 문자열 연결로 우회
 - `repcore.GameType1on1` 상수는 `screp v1.5.1`에 없음 → 사용하지 않음
+
+## Discord OAuth 설정
+
+게임 기록 시 `discord_id`를 저장하기 위해 Discord 로그인이 필요합니다.
+
+### 1. Discord Application 등록
+
+1. [Discord Developer Portal](https://discord.com/developers/applications) → New Application
+2. OAuth2 → Redirects → `http://localhost:8080/auth/discord/callback` 추가
+3. CLIENT ID, CLIENT SECRET 복사
+
+### 2. 환경변수 설정
+
+```env
+# .env (로컬 개발)
+DISCORD_CLIENT_ID=your_client_id
+DISCORD_CLIENT_SECRET=your_client_secret
+```
+
+운영 빌드 시 GitHub Actions secret으로 ldflags 주입:
+```
+-X main.discordClientID=${{ secrets.DISCORD_CLIENT_ID }}
+-X main.discordClientSecret=${{ secrets.DISCORD_CLIENT_SECRET }}
+```
+
+### 동작 방식
+
+- 대시보드 헤더의 "Discord로 로그인" 버튼 → OAuth 인증 → 세션 저장 (in-memory)
+- 로그인 상태에서만 리플레이 감지 시 DB 저장 (미로그인 시 콘솔 경고 출력 후 스킵)
+- 세션은 프로그램 재시작 시 초기화 → 재로그인 필요

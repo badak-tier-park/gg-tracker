@@ -30,6 +30,7 @@ func New(supabaseURL, anonKey, appSecret string) *Client {
 
 func (c *Client) InsertGame(g *store.Game) error {
 	body, _ := json.Marshal(map[string]any{
+		"discord_id":            g.DiscordID,
 		"played_at":             g.PlayedAt.Format(time.RFC3339),
 		"map_name":              g.MapName,
 		"game_duration_seconds": g.GameDurationSeconds,

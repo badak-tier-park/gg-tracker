@@ -16,17 +16,19 @@ import (
 )
 
 type Watcher struct {
-	replayPath string
-	db         store.Store
-	stopCh     chan struct{}
-	wg         sync.WaitGroup
+	replayPath   string
+	db           store.Store
+	getDiscordID func() int64
+	stopCh       chan struct{}
+	wg           sync.WaitGroup
 }
 
-func New(replayPath string, database store.Store) *Watcher {
+func New(replayPath string, database store.Store, getDiscordID func() int64) *Watcher {
 	return &Watcher{
-		replayPath: replayPath,
-		db:         database,
-		stopCh:     make(chan struct{}),
+		replayPath:   replayPath,
+		db:           database,
+		getDiscordID: getDiscordID,
+		stopCh:       make(chan struct{}),
 	}
 }
 
@@ -129,6 +131,12 @@ func (w *Watcher) processReplay(filePath string) {
 
 	fmt.Printf("[%s] 리플레이 감지: %s\n", timestamp(), filepath.Base(filePath))
 
+	discordID := w.getDiscordID()
+	if discordID == 0 {
+		fmt.Printf("[%s] Discord 로그인 필요 — http://localhost:8080 에서 로그인 후 게임이 기록됩니다\n", timestamp())
+		return
+	}
+
 	game, err := parser.ParseReplay(filePath)
 	if err != nil {
 		fmt.Printf("[%s] 파싱 실패: %v\n", timestamp(), err)
@@ -137,6 +145,7 @@ func (w *Watcher) processReplay(filePath string) {
 
 	// DB의 UNIQUE 제약조건 통과 및 고유성 보장을 위해 ReplayFile 필드를 해시로 덮어씀
 	game.ReplayFile = hashStr
+	game.DiscordID = discordID
 
 	if err := w.db.InsertGame(game); err != nil {
 		fmt.Printf("[%s] DB 저장 실패: %v\n", timestamp(), err)

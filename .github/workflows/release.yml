@@ -15,6 +15,8 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
       APP_SECRET: ${{ secrets.APP_SECRET }}
+      DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+      DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
 
     steps:
       - name: Checkout
@@ -46,19 +48,19 @@ jobs:
       - name: Build Windows (amd64)
         if: steps.tag_check.outputs.exists == 'false'
         run: |
-          LDFLAGS="-s -w -X main.supabaseURL=$SUPABASE_URL -X main.supabaseAnonKey=$SUPABASE_KEY -X main.appSecret=$APP_SECRET"
+          LDFLAGS="-s -w -X main.supabaseURL=$SUPABASE_URL -X main.supabaseAnonKey=$SUPABASE_KEY -X main.appSecret=$APP_SECRET -X main.discordClientID=$DISCORD_CLIENT_ID -X main.discordClientSecret=$DISCORD_CLIENT_SECRET"
           GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o gg-tracker.exe .
 
       - name: Build macOS Apple Silicon (darwin/arm64)
         if: steps.tag_check.outputs.exists == 'false'
         run: |
-          LDFLAGS="-s -w -X main.supabaseURL=$SUPABASE_URL -X main.supabaseAnonKey=$SUPABASE_KEY -X main.appSecret=$APP_SECRET"
+          LDFLAGS="-s -w -X main.supabaseURL=$SUPABASE_URL -X main.supabaseAnonKey=$SUPABASE_KEY -X main.appSecret=$APP_SECRET -X main.discordClientID=$DISCORD_CLIENT_ID -X main.discordClientSecret=$DISCORD_CLIENT_SECRET"
           GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o gg-tracker .
 
       - name: Build macOS Intel (darwin/amd64)
         if: steps.tag_check.outputs.exists == 'false'
         run: |
-          LDFLAGS="-s -w -X main.supabaseURL=$SUPABASE_URL -X main.supabaseAnonKey=$SUPABASE_KEY -X main.appSecret=$APP_SECRET"
+          LDFLAGS="-s -w -X main.supabaseURL=$SUPABASE_URL -X main.supabaseAnonKey=$SUPABASE_KEY -X main.appSecret=$APP_SECRET -X main.discordClientID=$DISCORD_CLIENT_ID -X main.discordClientSecret=$DISCORD_CLIENT_SECRET"
           GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o gg-tracker-intel .
 
       - name: Release

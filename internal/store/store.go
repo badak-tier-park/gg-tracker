@@ -4,6 +4,7 @@ import "time"
 
 type Game struct {
 	ID                  int64
+	DiscordID           int64
 	PlayedAt            time.Time
 	MapName             string
 	GameDurationSeconds int
