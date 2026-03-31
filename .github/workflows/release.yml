@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     env:
       SUPABASE_URL: "https://vydawdpzfpmwqmvymwsi.supabase.co"
