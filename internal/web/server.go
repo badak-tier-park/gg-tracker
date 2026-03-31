@@ -1,11 +1,13 @@
 package web
 
 import (
+	"crypto/rand"
 	"embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 
@@ -21,21 +23,39 @@ var (
 	setupTmpl     = template.Must(template.ParseFS(templateFS, "templates/setup.html"))
 )
 
+const discordRedirectURI = "http://localhost:8080/auth/discord/callback"
+
 type Server struct {
-	mu        sync.RWMutex
-	database  store.Store
-	cfg       *config.Config
-	cfgPath   string
-	restartCh chan<- struct{}
+	mu                  sync.RWMutex
+	database            store.Store
+	cfg                 *config.Config
+	cfgPath             string
+	restartCh           chan<- struct{}
+	discordClientID     string
+	discordClientSecret string
+	// 단일 사용자 세션 (in-memory)
+	discordID       int64
+	discordUsername string
+	pendingState    string
 }
 
-func NewServer(database store.Store, cfg *config.Config, cfgPath string, restartCh chan<- struct{}) *Server {
+func NewServer(database store.Store, cfg *config.Config, cfgPath string, restartCh chan<- struct{}, discordClientID, discordClientSecret string) *Server {
 	return &Server{
-		database:  database,
-		cfg:       cfg,
-		cfgPath:   cfgPath,
-		restartCh: restartCh,
+		database:            database,
+		cfg:                 cfg,
+		cfgPath:             cfgPath,
+		restartCh:           restartCh,
+		discordClientID:     discordClientID,
+		discordClientSecret: discordClientSecret,
 	}
+}
+
+// GetDiscordID returns the currently logged-in Discord user's ID (0 if not logged in).
+// 스레드 안전 — watcher에서 func() int64 클로저로 호출됨.
+func (s *Server) GetDiscordID() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.discordID
 }
 
 func (s *Server) Start(addr string) {
@@ -44,10 +64,137 @@ func (s *Server) Start(addr string) {
 	mux.HandleFunc("/setup", s.handleSetup)
 	mux.HandleFunc("/api/games", s.handleAPIGames)
 	mux.HandleFunc("/api/stats", s.handleAPIStats)
+	mux.HandleFunc("/auth/discord", s.handleDiscordLogin)
+	mux.HandleFunc("/auth/discord/callback", s.handleDiscordCallback)
+	mux.HandleFunc("/auth/discord/logout", s.handleDiscordLogout)
 
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		fmt.Printf("[오류] 웹 서버 시작 실패: %v\n", err)
 	}
+}
+
+// ── Discord OAuth ──────────────────────────────────────────────
+
+func (s *Server) handleDiscordLogin(w http.ResponseWriter, r *http.Request) {
+	if s.discordClientID == "" {
+		http.Error(w, "Discord 클라이언트 ID가 설정되지 않았습니다. .env에 DISCORD_CLIENT_ID를 추가해주세요.", http.StatusServiceUnavailable)
+		return
+	}
+
+	b := make([]byte, 16)
+	rand.Read(b)
+	state := fmt.Sprintf("%x", b)
+
+	s.mu.Lock()
+	s.pendingState = state
+	s.mu.Unlock()
+
+	authURL := "https://discord.com/oauth2/authorize?" +
+		"client_id=" + url.QueryEscape(s.discordClientID) +
+		"&redirect_uri=" + url.QueryEscape(discordRedirectURI) +
+		"&response_type=code" +
+		"&scope=identify" +
+		"&state=" + state
+
+	http.Redirect(w, r, authURL, http.StatusFound)
+}
+
+func (s *Server) handleDiscordCallback(w http.ResponseWriter, r *http.Request) {
+	state := r.URL.Query().Get("state")
+	code := r.URL.Query().Get("code")
+
+	s.mu.Lock()
+	expected := s.pendingState
+	s.pendingState = ""
+	s.mu.Unlock()
+
+	if state == "" || state != expected {
+		http.Error(w, "잘못된 요청입니다 (state 불일치)", http.StatusBadRequest)
+		return
+	}
+
+	token, err := s.discordExchangeCode(code)
+	if err != nil {
+		http.Error(w, "Discord 인증 실패: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	discordID, username, err := s.discordGetUser(token)
+	if err != nil {
+		http.Error(w, "사용자 정보 조회 실패: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.mu.Lock()
+	s.discordID = discordID
+	s.discordUsername = username
+	s.mu.Unlock()
+
+	fmt.Printf("[Discord] 로그인: %s (%d)\n", username, discordID)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) handleDiscordLogout(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.discordID = 0
+	s.discordUsername = ""
+	s.mu.Unlock()
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) discordExchangeCode(code string) (string, error) {
+	vals := url.Values{
+		"client_id":     {s.discordClientID},
+		"client_secret": {s.discordClientSecret},
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"redirect_uri":  {discordRedirectURI},
+	}
+	resp, err := http.PostForm("https://discord.com/api/oauth2/token", vals)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		AccessToken string `json:"access_token"`
+		Error       string `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	if result.Error != "" {
+		return "", fmt.Errorf("%s", result.Error)
+	}
+	if result.AccessToken == "" {
+		return "", fmt.Errorf("액세스 토큰 없음")
+	}
+	return result.AccessToken, nil
+}
+
+func (s *Server) discordGetUser(token string) (int64, string, error) {
+	req, _ := http.NewRequest("GET", "https://discord.com/api/users/@me", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, "", err
+	}
+	defer resp.Body.Close()
+
+	var user struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
+		return 0, "", err
+	}
+
+	id, err := strconv.ParseInt(user.ID, 10, 64)
+	if err != nil {
+		return 0, "", fmt.Errorf("Discord ID 파싱 실패: %v", err)
+	}
+	return id, user.Username, nil
 }
 
 // ── API handlers ──────────────────────────────────────────────
@@ -199,8 +346,18 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/setup", http.StatusSeeOther)
 		return
 	}
+
+	s.mu.RLock()
+	username := s.discordUsername
+	discordID := s.discordID
+	s.mu.RUnlock()
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	dashboardTmpl.Execute(w, nil)
+	dashboardTmpl.Execute(w, map[string]any{
+		"DiscordUsername": username,
+		"DiscordID":       discordID,
+		"HasDiscordApp":   s.discordClientID != "",
+	})
 }
 
 // ── Helpers ───────────────────────────────────────────────────

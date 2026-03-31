@@ -27,11 +27,11 @@ func New(connStr string) (*DB, error) {
 func (d *DB) InsertGame(g *store.Game) error {
 	_, err := d.conn.Exec(`
 		INSERT INTO games
-			(played_at, map_name, game_duration_seconds, winner_name, winner_race,
+			(discord_id, played_at, map_name, game_duration_seconds, winner_name, winner_race,
 			 loser_name, loser_race, winner_apm, loser_apm, replay_file)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (replay_file) DO NOTHING`,
-		g.PlayedAt, g.MapName, g.GameDurationSeconds,
+		g.DiscordID, g.PlayedAt, g.MapName, g.GameDurationSeconds,
 		g.WinnerName, g.WinnerRace,
 		g.LoserName, g.LoserRace,
 		g.WinnerAPM, g.LoserAPM,
