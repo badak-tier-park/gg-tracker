@@ -12,8 +12,9 @@ jobs:
       contents: write
 
     env:
-      SUPABASE_URL: "https://vydawdpzfpmwqmvymwsi.supabase.co"
-      SUPABASE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5ZGF3ZHB6ZnBtd3Ftdnltd3NpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0MjYzNDYsImV4cCI6MjA5MDAwMjM0Nn0.WEE-sHB5woplMM3URHIs3cX0mUV_MdvETsU-_v40XQs"
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      APP_SECRET: ${{ secrets.APP_SECRET }}
 
     steps:
       - name: Checkout
@@ -45,19 +46,19 @@ jobs:
       - name: Build Windows (amd64)
         if: steps.tag_check.outputs.exists == 'false'
         run: |
-          LDFLAGS="-s -w -X main.supabaseURL=$SUPABASE_URL -X main.supabaseAnonKey=$SUPABASE_KEY"
+          LDFLAGS="-s -w -X main.supabaseURL=$SUPABASE_URL -X main.supabaseAnonKey=$SUPABASE_KEY -X main.appSecret=$APP_SECRET"
           GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o gg-tracker.exe .
 
       - name: Build macOS Apple Silicon (darwin/arm64)
         if: steps.tag_check.outputs.exists == 'false'
         run: |
-          LDFLAGS="-s -w -X main.supabaseURL=$SUPABASE_URL -X main.supabaseAnonKey=$SUPABASE_KEY"
+          LDFLAGS="-s -w -X main.supabaseURL=$SUPABASE_URL -X main.supabaseAnonKey=$SUPABASE_KEY -X main.appSecret=$APP_SECRET"
           GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o gg-tracker .
 
       - name: Build macOS Intel (darwin/amd64)
         if: steps.tag_check.outputs.exists == 'false'
         run: |
-          LDFLAGS="-s -w -X main.supabaseURL=$SUPABASE_URL -X main.supabaseAnonKey=$SUPABASE_KEY"
+          LDFLAGS="-s -w -X main.supabaseURL=$SUPABASE_URL -X main.supabaseAnonKey=$SUPABASE_KEY -X main.appSecret=$APP_SECRET"
           GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o gg-tracker-intel .
 
       - name: Release

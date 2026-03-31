@@ -19,10 +19,11 @@ import (
 	"gg-tracker/internal/web"
 )
 
-// 빌드 시 ldflags로 주입: -X main.supabaseURL=... -X main.supabaseAnonKey=...
+// 빌드 시 ldflags로 주입: -X main.supabaseURL=... -X main.supabaseAnonKey=... -X main.appSecret=...
 var (
 	supabaseURL     string
 	supabaseAnonKey string
+	appSecret       string
 )
 
 func main() {
@@ -58,7 +59,7 @@ func main() {
 	// Supabase 키가 있으면 운영(Edge Function), 없으면 로컬 DB
 	var st store.Store
 	if supabaseURL != "" && supabaseAnonKey != "" {
-		st = api.New(supabaseURL, supabaseAnonKey)
+		st = api.New(supabaseURL, supabaseAnonKey, appSecret)
 	} else {
 		dbConnStr := buildDBConnStr()
 		if dbConnStr == "" {
