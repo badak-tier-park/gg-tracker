@@ -3,3 +3,4 @@ gg-tracker
 gg-tracker-intel
 config.json
 .env
+.mcp.json
