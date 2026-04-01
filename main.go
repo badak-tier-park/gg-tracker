@@ -49,6 +49,9 @@ func main() {
 	if supabaseAnonKey == "" {
 		supabaseAnonKey = os.Getenv("SUPABASE_ANON_KEY")
 	}
+	if appSecret == "" {
+		appSecret = os.Getenv("APP_SECRET")
+	}
 	if discordClientID == "" {
 		discordClientID = os.Getenv("DISCORD_CLIENT_ID")
 	}
