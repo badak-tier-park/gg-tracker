@@ -25,43 +25,59 @@ gg-tracker/
 ├── go.mod / go.sum
 ├── config.json          # 사용자 설정 (ReplayPath 등)
 ├── .env                 # 로컬 개발용 (gitignore)
+├── .env.example         # 환경변수 템플릿
 └── internal/
     ├── store/store.go   # Game 구조체 + Store 인터페이스 (공통)
     ├── api/client.go    # Supabase Edge Function HTTP 클라이언트
-    ├── db/db.go         # 로컬 PostgreSQL 직접 연결
+    ├── db/db.go         # 로컬 PostgreSQL 직접 연결 (미사용 예정)
     ├── config/config.go # ReplayPath, SetupComplete
     ├── parser/parser.go # screp 파서, 승자/패자 감지
     ├── watcher/watcher.go # fsnotify, debounce 3초
     └── web/server.go    # 로컬 웹 대시보드 (port 8080)
 ```
 
+## 환경변수
+
+### 로컬 개발 (.env)
+
+로컬 실행 시 Supabase **개발 DB**(`badak-dev`)에 데이터를 적재합니다.
+`.env.example`을 복사해서 `.env`를 만들고 값을 채워주세요.
+
+```env
+SUPABASE_URL=https://<dev-project-id>.supabase.co
+SUPABASE_ANON_KEY=
+APP_SECRET=
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
+```
+
+### 운영 배포 (GitHub Secrets)
+
+`main` 브랜치 푸시 시 GitHub Actions가 빌드하면서 아래 시크릿을 ldflags로 주입합니다.
+로컬 `.env`와 완전히 분리되어 있습니다.
+
+| Secret 키 | 용도 |
+|-----------|------|
+| `SUPABASE_URL` | 운영 Supabase 프로젝트 URL |
+| `SUPABASE_KEY` | 운영 anon key |
+| `APP_SECRET` | Edge Function 인증 시크릿 |
+| `DISCORD_CLIENT_ID` | Discord OAuth 클라이언트 ID |
+| `DISCORD_CLIENT_SECRET` | Discord OAuth 클라이언트 시크릿 |
+
 ## Supabase 프로젝트
 
-- Project ID: `vydawdpzfpmwqmvymwsi`
-- Edge Function: `record-game` (배포 완료)
-- Edge Function 레포: `badak-tier-park-api` → `supabase/functions/record-game/index.ts`
+| 환경 | Project ID | 용도 |
+|------|-----------|------|
+| 운영 | `vydawdpzfpmwqmvymwsi` | 실제 유저 데이터 |
+| 개발 | `wtzfekruohdxchjpefdj` | 로컬 개발 및 테스트 |
+
+Edge Function: `record-game`, `get-games` (운영/개발 양쪽 모두 배포됨)
 
 ## DB 스키마
 
-스키마는 별도 레포에서 관리됩니다:
+스키마 변경이 필요할 경우 Supabase MCP를 통해 직접 적용합니다 (`.mcp.json` 참고).
 
-> https://github.com/badak-tier-park/badak-schema/blob/main/schema.sql
-
-### 주요 테이블 요약
-
-```sql
--- 사용자
-users (id, discord_id, nickname, race CHECK('T','Z','P'), tier, is_admin, ...)
-
--- 닉네임/종족 변경 요청 (승인 워크플로)
-change_requests (id, type CHECK('nickname','race'), discord_id, old_value, new_value,
-                 status CHECK('pending','approved','rejected'), message_id, channel_id, ...)
-
--- 게임 기록
-games (id, discord_id, played_at, map_name, game_duration_seconds,
-       winner_name, winner_race, loser_name, loser_race,
-       winner_apm, loser_apm, replay_file UNIQUE, ...)
-```
+로컬에 별도 스키마 파일을 관리하지 않습니다.
 
 ## 알려진 주의사항
 
@@ -78,21 +94,7 @@ games (id, discord_id, played_at, map_name, game_duration_seconds,
 2. OAuth2 → Redirects → `http://localhost:8080/auth/discord/callback` 추가
 3. CLIENT ID, CLIENT SECRET 복사
 
-### 2. 환경변수 설정
-
-```env
-# .env (로컬 개발)
-DISCORD_CLIENT_ID=your_client_id
-DISCORD_CLIENT_SECRET=your_client_secret
-```
-
-운영 빌드 시 GitHub Actions secret으로 ldflags 주입:
-```
--X main.discordClientID=${{ secrets.DISCORD_CLIENT_ID }}
--X main.discordClientSecret=${{ secrets.DISCORD_CLIENT_SECRET }}
-```
-
-### 동작 방식
+### 2. 동작 방식
 
 - 대시보드 헤더의 "Discord로 로그인" 버튼 → OAuth 인증 → 세션 저장 (in-memory)
 - 로그인 상태에서만 리플레이 감지 시 DB 저장 (미로그인 시 콘솔 경고 출력 후 스킵)
