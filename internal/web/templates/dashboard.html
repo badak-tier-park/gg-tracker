@@ -46,6 +46,24 @@
   .refresh-btn:hover { background: #30363d; }
   a.settings { margin-left: 8px; color: #8b949e; font-size: 13px; text-decoration: none; }
   a.settings:hover { color: #e6edf3; }
+  /* Discord auth */
+  .discord-user { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .discord-username { color: #e6edf3; font-size: 13px; font-weight: 600; }
+  .discord-tag { color: #8b949e; font-size: 12px; }
+  .btn-discord-login { background: #5865F2; border: none; border-radius: 6px;
+                       padding: 7px 14px; color: #fff; font-size: 13px;
+                       cursor: pointer; text-decoration: none; display: inline-block; }
+  .btn-discord-login:hover { background: #4752C4; }
+  .btn-logout { background: transparent; border: 1px solid #30363d; border-radius: 6px;
+                padding: 6px 12px; color: #8b949e; font-size: 12px;
+                cursor: pointer; text-decoration: none; }
+  .btn-logout:hover { color: #e6edf3; border-color: #8b949e; }
+  .login-banner { background: #1c2128; border: 1px solid #d29922; border-radius: 8px;
+                  padding: 14px 20px; margin-bottom: 20px;
+                  display: flex; align-items: center; gap: 12px; font-size: 14px; }
+  .login-banner span { color: #d29922; }
+  .login-banner a { color: #58a6ff; text-decoration: none; font-weight: 600; }
+  .login-banner a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -54,9 +72,26 @@
   <div class="status-dot"></div>
   <span class="status-label">감시 중</span>
   <a href="/setup" class="settings">⚙ 설정</a>
+  <div class="discord-user">
+    {{if .DiscordUsername}}
+      <span class="discord-username">{{.DiscordUsername}}</span>
+      <a href="/auth/discord/logout" class="btn-logout">로그아웃</a>
+    {{else if .HasDiscordApp}}
+      <a href="/auth/discord" class="btn-discord-login">Discord로 로그인</a>
+    {{end}}
+  </div>
 </header>
 
 <div class="container">
+  {{if not .DiscordUsername}}
+  {{if .HasDiscordApp}}
+  <div class="login-banner">
+    <span>⚠</span>
+    <div>게임을 기록하려면 <a href="/auth/discord">Discord 로그인</a>이 필요합니다. 로그인하지 않으면 리플레이가 감지되어도 저장되지 않습니다.</div>
+  </div>
+  {{end}}
+  {{end}}
+
   <div class="stats">
     <div class="stat-card total">
       <div class="label">총 게임</div>

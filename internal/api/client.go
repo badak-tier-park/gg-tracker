@@ -15,19 +15,22 @@ import (
 type Client struct {
 	supabaseURL string
 	anonKey     string
+	appSecret   string
 	http        *http.Client
 }
 
-func New(supabaseURL, anonKey string) *Client {
+func New(supabaseURL, anonKey, appSecret string) *Client {
 	return &Client{
 		supabaseURL: supabaseURL,
 		anonKey:     anonKey,
+		appSecret:   appSecret,
 		http:        &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
 func (c *Client) InsertGame(g *store.Game) error {
 	body, _ := json.Marshal(map[string]any{
+		"discord_id":            g.DiscordID,
 		"played_at":             g.PlayedAt.Format(time.RFC3339),
 		"map_name":              g.MapName,
 		"game_duration_seconds": g.GameDurationSeconds,
@@ -46,6 +49,7 @@ func (c *Client) InsertGame(g *store.Game) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.anonKey)
+	req.Header.Set("X-App-Secret", c.appSecret)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
