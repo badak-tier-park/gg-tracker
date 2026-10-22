@@ -61,7 +61,10 @@ go build ./... && go vet ./...
 - Assignees = 작성자, Reviewers = 작성자 외 쓰기 권한자 전원
   (`gh api repos/badak-tier-park/<저장소>/collaborators --jq '.[].login'`), 종류 Labels,
   관련 이슈는 본문 `Closes #n`. 이 저장소에는 badak-web 같은 PR 자동 설정 워크플로가 없어 직접 채운다
-- 보호 규칙: `dev`·`main` 모두 승인 1명 필요, 삭제·강제 푸시 금지
+- **기본 브랜치는 `dev`**다. `Closes #n`은 기본 브랜치에 병합될 때만 이슈를 닫기 때문. 운영 배포는 여전히 `main` 푸시 기준
+- 보호 규칙: `dev`·`main` 모두 승인 1명, **푸시하면 기존 승인 무효**, **리뷰 코멘트를 해결해야 병합**, 삭제·강제 푸시 금지.
+  `main` 규칙의 대상은 `refs/heads/main`으로 고정돼 있다(`~DEFAULT_BRANCH`로 두면 기본 브랜치를 바꿀 때 main 보호가 풀린다)
+- 병합된 브랜치는 원격에서 자동 삭제된다
 
 - Projects: 조직 프로젝트 `gg-tracker`(#4)
   (`gh project item-add 4 --owner badak-tier-park --url <PR/이슈 URL>`)
